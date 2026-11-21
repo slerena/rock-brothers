@@ -6,9 +6,6 @@
 **Rock Brothers**: porte del juego **Asteroids** de Pandora MINI a proyecto aparte, para hacerlo
 multijugador (coop + PvP, arena compartida) con el cliente **en el navegador**.
 
-El juego es una copia de `pandora-mini-4/internal/asteroids`, así que
-`pandora-mini-4` no se toca.
-
 ## Cómo se ejecuta
 
 ```bash
