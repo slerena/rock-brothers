@@ -1,0 +1,8 @@
+# Artefactos de compilación (se generan con `make wasm` / `go build`)
+bin/
+web/game.wasm
+web/wasm_exec.js
+
+# Basura del sistema
+.DS_Store
+*.swp

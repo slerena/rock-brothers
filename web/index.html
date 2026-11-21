@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Rock Brothers</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #05070a; }
+    body { display: flex; align-items: center; justify-content: center; }
+    #game {
+      display: block;
+      box-shadow: 0 0 0 1px #0d3d1c, 0 0 40px rgba(57, 255, 106, .15);
+      border-radius: 4px;
+    }
+    #msg { position: fixed; top: 12px; left: 14px; color: #8fffb0;
+           font: 14px ui-monospace, Menlo, Consolas, monospace; }
+    #msg.err { color: #ff6a6a; }
+    /* estado de la conexión multijugador */
+    #net { position: fixed; left: 14px; bottom: 10px; color: #59c98a; opacity: .85;
+           font: 12px ui-monospace, Menlo, Consolas, monospace; }
+    /* el atributo hidden tiene que poder ganarle a display:flex */
+    #start[hidden] { display: none; }
+    /* Pantalla de bienvenida: título con aire de fósforo y asteroides de fondo
+       (canvas propio). Es también el gesto que el navegador exige para dar
+       teclado y sonido. */
+    #start { position: fixed; inset: 0; z-index: 10; display: flex;
+             align-items: center; justify-content: center;
+             background: #05070a; color: #8fffb0;
+             font: 16px ui-monospace, Menlo, Consolas, monospace;
+             text-align: center; cursor: pointer; user-select: none; overflow: hidden; }
+    #titleBg { position: absolute; inset: 0; width: 100%; height: 100%;
+               pointer-events: none; }
+    /* scanlines + viñeta por encima del fondo y por debajo del texto */
+    #start::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+                    background:
+                      repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px),
+                      radial-gradient(120% 90% at 50% 50%, transparent 38%, rgba(0,0,0,.8)); }
+    .start-box { position: relative; z-index: 2; display: flex; flex-direction: column;
+                 align-items: center; gap: 12px; padding: 24px 34px; max-width: 760px; }
+    .start-kicker { letter-spacing: 5px; font-size: 11px; opacity: .7; }
+    .start-title { margin: 0; font-size: clamp(34px, 9vw, 82px); line-height: .92;
+                   letter-spacing: clamp(2px, 1.4vw, 14px); color: #d6ffe4;
+                   text-shadow: 0 0 6px rgba(57,255,106,.95), 0 0 26px rgba(57,255,106,.6),
+                                0 0 64px rgba(57,255,106,.35);
+                   animation: flicker 7s infinite; }
+    .start-title span { display: block; color: #39ff6a; }
+    @keyframes flicker { 0%,95%,100% { opacity: 1 } 96% { opacity: .7 } 97% { opacity: .96 } }
+    .start-sub { margin: 0; opacity: .85; max-width: 48ch; line-height: 1.5; font-size: 14px; }
+    .start-keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+                  gap: 5px 20px; margin-top: 2px; font-size: 13px; opacity: .9; }
+    .start-keys b { color: #ffd060; }
+    #startBtn { margin-top: 10px; padding: 13px 40px; cursor: pointer;
+                background: #0d3d1c; color: #d6ffe4; border: 2px solid #39ff6a;
+                font: inherit; font-size: 18px; letter-spacing: 4px;
+                box-shadow: 0 0 22px rgba(57,255,106,.35); }
+    #startBtn:hover { background: #14522a; box-shadow: 0 0 36px rgba(57,255,106,.6); }
+    .start-hint { font-size: 11px; opacity: .5; letter-spacing: 1px; }
+    /* sala de espera: jugadores, su "listo" y su lag, y la cuenta atrás */
+    #lobby { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+             align-items: center; justify-content: center; gap: 16px;
+             background: rgba(5,7,10,.94); color: #8fffb0; text-align: center;
+             font: 16px ui-monospace, Menlo, Consolas, monospace; user-select: none; }
+    #lobby[hidden] { display: none; }
+    #lobby h1 { margin: 0; font-size: 30px; letter-spacing: 8px; }
+    #lobby ul { list-style: none; margin: 0; padding: 0; min-width: 360px; }
+    #lobby li { display: flex; justify-content: space-between; gap: 30px;
+                padding: 7px 12px; border-bottom: 1px solid #0d3d1c; }
+    #lobby li span.lag { opacity: .65; }
+    #lobby #lobbyCount { min-height: 1.3em; opacity: .9; }
+    #lobby #lobbyMode { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+                        justify-content: center; }
+    #lobby #lobbyMode span { opacity: .8; }
+    #lobby #lobbyMode button { padding: 7px 14px; margin: 0; letter-spacing: 1px; }
+    #lobby #lobbyMode button.on { background: #14522a; border-color: #8fffb0; }
+    #lobby #lobbyArena { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+                          justify-content: center; }
+    #lobby #lobbyArena[hidden] { display: none; }
+    #lobby #lobbyArena span { opacity: .8; }
+    #lobby #lobbyArena button { padding: 7px 14px; margin: 0; letter-spacing: 1px; }
+    #lobby #lobbyArena button.on { background: #10344a; border-color: #7ad0ff; color: #bde9ff; }
+    #lobby #lobbyNameRow { display: flex; align-items: center; gap: 10px; opacity: .9; }
+    #lobby #lobbyBots { display: flex; align-items: center; gap: 8px; opacity: .9; }
+    #lobby #lobbyBots button { padding: 4px 12px; margin: 0; }
+    #lobby #lobbyBots span#botCount { min-width: 1.4em; text-align: center; }
+    #lobby #lobbyBots select { background: #0a1a12; color: #8fffb0; border: 1px solid #0d3d1c;
+                               padding: 4px 8px; font: inherit; }
+    #lobby input { background: #0a1a12; color: #8fffb0; border: 1px solid #0d3d1c;
+                   padding: 6px 10px; font: inherit; width: 14ch; text-align: center; }
+    #lobby input:focus { outline: none; border-color: #39ff6a; }
+    #lobby button { margin-top: 4px; padding: 11px 24px; cursor: pointer;
+                    background: #0d3d1c; color: #8fffb0; border: 2px solid #39ff6a;
+                    font: inherit; letter-spacing: 2px; }
+    #lobby button:hover { background: #14522a; }
+    #lobby button.ready { border-color: #ffd060; color: #ffd060; }
+    #lobby button:disabled { opacity: .5; cursor: default; }
+  </style>
+</head>
+<body>
+  <!-- El juego pinta aquí, a resolución fija; el CSS lo estira a la ventana. -->
+  <canvas id="game"></canvas>
+
+  <div id="msg">Cargando WebAssembly…</div>
+  <div id="net">modo solitario</div>
+
+  <!-- El navegador no deja sonar audio ni dar teclado sin un gesto del usuario:
+       esta pantalla de bienvenida es ese gesto. -->
+  <div id="start" hidden>
+    <canvas id="titleBg"></canvas>
+    <div class="start-box">
+      <div class="start-kicker">ASTEROIDES MULTIJUGADOR</div>
+      <h1 class="start-title">ROCK<span>BROTHERS</span></h1>
+      <p class="start-sub">Pilota tu nave, revienta asteroides y no te fíes de nadie:
+        cooperativo o todos contra todos, hasta 8 jugadores.</p>
+      <div class="start-keys">
+        <div><b>WASD</b> mover · <b>ESPACIO</b> disparar</div>
+        <div><b>S</b> escudo · <b>ENTER</b> teletransporte</div>
+        <div><b>M</b> misil · <b>K</b> mina</div>
+        <div><b>G</b> railgun · <b>L</b> rayo letal</div>
+      </div>
+      <button id="startBtn" type="button">▶ JUGAR</button>
+      <div class="start-hint">un clic para activar el teclado y el sonido</div>
+    </div>
+  </div>
+
+  <!-- Sala de espera (multijugador): todos listos → cuenta atrás → partida. -->
+  <div id="lobby" hidden>
+    <h1>ROCK BROTHERS</h1>
+    <ul id="lobbyPlayers"></ul>
+    <div id="lobbyArena" hidden>
+      <span>arena:</span>
+      <button id="arenaRocks" type="button">☄ ASTEROIDES</button>
+      <button id="arenaFixed" type="button">🧱 CAMPO FIJO</button>
+    </div>
+    <div id="lobbyMode">
+      <span>tipo de partida:</span>
+      <button id="modeCoop" type="button">🤝 COOPERATIVO</button>
+      <button id="modePvp" type="button">⚔ TODOS CONTRA TODOS</button>
+    </div>
+    <div id="lobbyBots">
+      <span>bots:</span>
+      <button id="botMinus" type="button">−</button>
+      <span id="botCount">0</span>
+      <button id="botPlus" type="button">+</button>
+      <select id="botLevel" title="nivel de los bots">
+        <option value="0">torpes</option>
+        <option value="1" selected>medios</option>
+        <option value="2">buenos</option>
+      </select>
+    </div>
+    <div id="lobbyNameRow">
+      <label for="lobbyName">tu nombre:</label>
+      <input id="lobbyName" maxlength="16" autocomplete="off" spellcheck="false">
+    </div>
+    <div id="lobbyCount">Esperando a que todos estén listos</div>
+    <button id="lobbyBtn" type="button">LISTO PARA JUGAR</button>
+  </div>
+
+  <script src="wasm_exec.js"></script>
+  <script>
+    const msg = document.getElementById('msg');
+    const canvas = document.getElementById('game');
+    const q = new URLSearchParams(location.search);
+
+    // Resolución del lienzo: 640x480 por la escala pedida. El juego se dibuja en
+    // unidades CSS (el tamaño que ocupa en la página), así que esta escala es
+    // SOLO nitidez: subirla no agranda nada, solo afina el trazo. 3 se ve fino en
+    // una pantalla Retina y va sobrado; 2 o 1 son más baratos.
+    const scale = q.has('scale') ? parseFloat(q.get('scale')) : 3;
+    const W = Math.round(640 * scale);
+    const H = Math.round(480 * scale);
+    canvas.width = W;
+    canvas.height = H;
+    document.title = 'Rock Brothers · ' + W + 'x' + H;
+
+    // Identidad y modo para el multijugador. El servidor reparte la sala:
+    // ?name=ana&mode=pvp
+    // ---- Sala de espera (multijugador) ----
+    // El cliente (Go) llama a __astLobby con la fase, la cuenta atrás y los
+    // jugadores; el botón avisa al servidor con __astReady.
+    const tints = ['#39ff6a', '#c07aff', '#5ad0ff', '#ffc050', '#ff7a9a', '#ffffff', '#ff9a4a', '#9a9aff'];
+    let lobbyReady = false;
+    function paintLobbyBtn() {
+      const btn = document.getElementById('lobbyBtn');
+      btn.textContent = lobbyReady ? 'LISTO ✓ (pulsa para cancelar)' : 'LISTO PARA JUGAR';
+      btn.className = lobbyReady ? 'ready' : '';
+    }
+    window.__astLobby = (phase, countdown, players, mode, arena) => {
+      const box = document.getElementById('lobby');
+      if (!box) return;
+      // durante la partida y la tabla del final no se tapa el juego
+      if (phase === 'playing' || phase === 'over') { box.hidden = true; return; }
+      box.hidden = false;
+      // tipo de partida (lo elige cualquiera de la sala)
+      document.getElementById('modeCoop').className = mode === 'pvp' ? '' : 'on';
+      document.getElementById('modePvp').className = mode === 'pvp' ? 'on' : '';
+      // la arena solo se elige en "todos contra todos"
+      const arenaRow = document.getElementById('lobbyArena');
+      arenaRow.hidden = mode !== 'pvp';
+      document.getElementById('arenaRocks').className = arena === 'fixed' ? '' : 'on';
+      document.getElementById('arenaFixed').className = arena === 'fixed' ? 'on' : '';
+      const ul = document.getElementById('lobbyPlayers');
+      ul.textContent = '';
+      (players || []).forEach(p => {
+        const li = document.createElement('li');
+        const who = document.createElement('span');
+        who.textContent = p.ready + ' ' + p.name;
+        who.style.color = tints[(p.id || 0) % tints.length];
+        if (p.me) who.style.fontWeight = 'bold';
+        const lag = document.createElement('span');
+        lag.className = 'lag';
+        lag.textContent = p.lag;
+        li.appendChild(who);
+        li.appendChild(lag);
+        ul.appendChild(li);
+      });
+      // cuántos bots hay (los nombres empiezan por "Bot ")
+      let nBots = 0;
+      (players || []).forEach(p => { if (/^Bot /.test(p.name)) nBots++; });
+      document.getElementById('botCount').textContent = nBots;
+      const btn = document.getElementById('lobbyBtn');
+      const cd = document.getElementById('lobbyCount');
+      if (phase === 'countdown') {
+        cd.textContent = '¡Empieza en ' + Math.ceil(countdown) + '!';
+        btn.disabled = true;
+      } else {
+        cd.textContent = 'Esperando a que todos estén listos';
+        btn.disabled = false;
+      }
+      paintLobbyBtn();
+    };
+    document.getElementById('lobbyBtn').addEventListener('click', () => {
+      lobbyReady = !lobbyReady;
+      if (window.__astReady) window.__astReady(lobbyReady);
+      paintLobbyBtn();
+    });
+
+    // Bots de pruebas: añadir y quitar.
+    document.getElementById('botPlus').addEventListener('click', () => {
+      const lvl = parseInt(document.getElementById('botLevel').value, 10) || 0;
+      if (window.__astBot) window.__astBot(true, lvl);
+    });
+    document.getElementById('botMinus').addEventListener('click', () => {
+      if (window.__astBot) window.__astBot(false);
+    });
+
+    // Tipo de partida: coop o todos contra todos.
+    document.getElementById('modeCoop').addEventListener('click', () => {
+      if (window.__astSetMode) window.__astSetMode('coop');
+    });
+    document.getElementById('modePvp').addEventListener('click', () => {
+      if (window.__astSetMode) window.__astSetMode('pvp');
+    });
+    // Arena del PvP: asteroides que se mueven o campo fijo con estructuras.
+    document.getElementById('arenaRocks').addEventListener('click', () => {
+      if (window.__astSetArena) window.__astSetArena('rocks');
+    });
+    document.getElementById('arenaFixed').addEventListener('click', () => {
+      if (window.__astSetArena) window.__astSetArena('fixed');
+    });
+
+    // Identidad y modo: ?name=ana&mode=pvp
+    if (q.has('name')) window.__astName = q.get('name');
+    if (q.has('mode')) window.__astMode = q.get('mode');
+    // El nombre se recuerda en una cookie: no hay que escribirlo cada vez.
+    function readCookie(n) {
+      const m = document.cookie.match(new RegExp('(?:^|; )' + n + '=([^;]*)'));
+      return m ? decodeURIComponent(m[1]) : '';
+    }
+    // Nombre: el de la URL, el de la cookie o uno al azar (para no llamarnos
+    // todos "jugador").
+    if (!window.__astName) {
+      window.__astName = readCookie('asteroids_name') ||
+        ('jugador' + Math.floor(10 + Math.random() * 90));
+    }
+    const nameInput = document.getElementById('lobbyName');
+    nameInput.value = window.__astName;
+    nameInput.addEventListener('change', () => {
+      const v = nameInput.value.trim();
+      if (v && window.__astSetName) window.__astSetName(v);
+      if (v) document.cookie = 'asteroids_name=' + encodeURIComponent(v) + '; max-age=31536000; path=/';
+    });
+    // Que las teclas escritas en el campo no lleguen al juego (ni se las coma).
+    ['keydown', 'keyup', 'keypress'].forEach(ev =>
+      nameInput.addEventListener(ev, e => e.stopPropagation()));
+
+    // Encajar el lienzo en la ventana conservando la proporción. El lienzo
+    // interno no cambia: solo se estira, así que el coste por frame es constante.
+    //
+    // En multijugador el campo lo fija el servidor y no debe estirarse más allá
+    // de su tamaño real (1:1): en una pantalla muy grande el juego se vería
+    // gigante. El cliente avisa del tamaño con __astFitWorld al conectar.
+    let fitMaxW = 0, fitMaxH = 0;
+    window.__astFitWorld = (w, h) => { fitMaxW = w; fitMaxH = h; fit(); };
+    function fit() {
+      let s = Math.min(innerWidth / W, innerHeight / H);
+      if (fitMaxW > 0) s = Math.min(s, fitMaxW / W, fitMaxH / H);
+      canvas.style.width = Math.round(W * s) + 'px';
+      canvas.style.height = Math.round(H * s) + 'px';
+    }
+    addEventListener('resize', fit);
+    fit();
+
+    if (q.has('glow')) window.__astGlow = parseInt(q.get('glow'), 10);
+    const autostart = q.has('autostart'); // sin pantalla de arranque (pruebas)
+    if (autostart) window.__astAutostart = true;
+    const fail = (t) => {
+      document.title = 'ERROR ' + t;
+      if (msg) { msg.className = 'err'; msg.textContent = t; }
+    };
+    addEventListener('error', (e) => { document.title = 'ERROR ' + (e.message || e); });
+    addEventListener('unhandledrejection', (e) => { document.title = 'ERROR ' + (e.reason || e); });
+
+    // --- Pantalla de bienvenida: asteroides a la deriva de fondo (decorativo,
+    // solo se anima mientras se ve; se para al entrar al juego).
+    const titleBg = document.getElementById('titleBg');
+    const titleCtx = titleBg.getContext('2d');
+    const titleRocks = [];
+    let titleRAF = 0, titleLast = 0, titleOn = false;
+    function titleResize() {
+      const dpr = devicePixelRatio || 1;
+      titleBg.width = Math.round(innerWidth * dpr);
+      titleBg.height = Math.round(innerHeight * dpr);
+    }
+    function titleStart() {
+      titleResize();
+      if (!titleRocks.length) {
+        for (let i = 0; i < 15; i++) {
+          const n = 7 + (i % 4), shape = [];
+          for (let k = 0; k < n; k++) shape.push(0.68 + Math.random() * 0.55);
+          titleRocks.push({
+            x: Math.random() * innerWidth, y: Math.random() * innerHeight,
+            r: 12 + Math.random() * 48, a: Math.random() * Math.PI * 2,
+            spin: (Math.random() - 0.5) * 0.5,
+            vx: (Math.random() - 0.5) * 26, vy: (Math.random() - 0.5) * 26,
+            shape,
+          });
+        }
+      }
+      if (titleOn) return;
+      titleOn = true;
+      titleLast = 0;
+      titleRAF = requestAnimationFrame(titleFrame);
+    }
+    function titleStop() {
+      titleOn = false;
+      cancelAnimationFrame(titleRAF);
+    }
+    function titleFrame(t) {
+      const w = innerWidth, h = innerHeight, dpr = devicePixelRatio || 1;
+      const dt = titleLast ? Math.min(0.05, (t - titleLast) / 1000) : 0;
+      titleLast = t;
+      titleCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      titleCtx.fillStyle = '#05070a';
+      titleCtx.fillRect(0, 0, w, h);
+      titleCtx.strokeStyle = 'rgba(13,61,28,.5)';
+      titleCtx.lineWidth = 1;
+      titleCtx.beginPath();
+      for (let x = 64; x < w; x += 64) { titleCtx.moveTo(x + .5, 0); titleCtx.lineTo(x + .5, h); }
+      for (let y = 64; y < h; y += 64) { titleCtx.moveTo(0, y + .5); titleCtx.lineTo(w, y + .5); }
+      titleCtx.stroke();
+      for (const r of titleRocks) {
+        r.x += r.vx * dt; r.y += r.vy * dt; r.a += r.spin * dt;
+        if (r.x < -r.r * 2) r.x = w + r.r; else if (r.x > w + r.r * 2) r.x = -r.r;
+        if (r.y < -r.r * 2) r.y = h + r.r; else if (r.y > h + r.r * 2) r.y = -r.r;
+        titleCtx.beginPath();
+        for (let k = 0; k < r.shape.length; k++) {
+          const ang = r.a + k * 2 * Math.PI / r.shape.length;
+          const px = r.x + Math.cos(ang) * r.r * r.shape[k];
+          const py = r.y + Math.sin(ang) * r.r * r.shape[k];
+          k ? titleCtx.lineTo(px, py) : titleCtx.moveTo(px, py);
+        }
+        titleCtx.closePath();
+        titleCtx.strokeStyle = 'rgba(57,255,106,.3)';
+        titleCtx.lineWidth = 1.4;
+        titleCtx.stroke();
+      }
+      titleRAF = requestAnimationFrame(titleFrame);
+    }
+    addEventListener('resize', () => { if (titleOn) titleResize(); });
+
+    (async function main() {
+      if (!window.WebAssembly) { fail('Este navegador no soporta WebAssembly.'); return; }
+      const go = new Go();
+      try {
+        let inst;
+        try {
+          inst = await WebAssembly.instantiateStreaming(fetch('game.wasm'), go.importObject);
+        } catch (e) {
+          const buf = await (await fetch('game.wasm')).arrayBuffer();
+          inst = await WebAssembly.instantiate(buf, go.importObject);
+        }
+        msg.remove();
+        if (!autostart) {
+          // El juego (lado Go) espera a este clic para arrancar (y para poder
+          // sonar: el navegador no deja audio sin un gesto del usuario).
+          const start = document.getElementById('start');
+          start.hidden = false;
+          titleStart();
+          start.addEventListener('pointerdown', () => { titleStop(); start.remove(); }, { once: true });
+        }
+        await go.run(inst.instance); // no vuelve hasta cerrar la pestaña
+      } catch (e) {
+        // el fallo se guarda también en el title para poder leerlo desde fuera
+        document.title = 'ERROR ' + e;
+        fail('No se pudo arrancar: ' + e);
+      }
+    })();
+  </script>
+</body>
+</html>
