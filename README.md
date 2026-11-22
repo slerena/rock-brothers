@@ -1,9 +1,6 @@
 # Rock Brothers
 
-> Proyecto: `rock-brothers` (antes `asteroids-mp`). El nombre del **juego** que
-> se ve en pantalla es **ROCK BROTHERS**.
-
-**Rock Brothers**: porte del juego **Asteroids** de Pandora MINI a proyecto aparte, para hacerlo
+**Rock Brothers**: porte del juego **Asteroids** de Pandora MINI como proyecto independiente, para hacerlo
 multijugador (coop + PvP, arena compartida) con el cliente **en el navegador**.
 
 ## Cómo se ejecuta
@@ -34,19 +31,9 @@ cliente web en http://localhost:8099  (sirviendo web)
 desde la LAN:  http://192.168.1.43:8099
 ```
 
-Así no hay que copiar una IP vieja a mano (cambia con el DHCP). El servidor
-escucha en `*:8099`, así que vale cualquier interfaz; si desde la LAN no responde,
-mira el cortafuegos del Mac antes que el código.
-
 En la sala se elige coop / todos-contra-todos, arena (asteroides / campo fijo), y
 se añaden bots con su nivel. **Tras cada compilación hay que recargar con
 Cmd+Shift+R**: el `game.wasm` se cachea y si no se recarga se juega con el viejo.
-
-Al cargar sale la **pantalla de bienvenida** (el título *ROCK BROTHERS* con
-asteroides a la deriva de fondo y el resumen de controles). Hay que hacer clic en
-ella porque el navegador **no da teclado ni deja sonar audio sin un gesto del
-usuario**: ese clic es el gesto. El fondo es un canvas aparte (`#titleBg`),
-decorativo, y su animación **se para** al entrar al juego.
 
 **Tests** (sin servidor, no hace falta navegador):
 
@@ -71,10 +58,6 @@ Parámetros de la URL (útiles para medir y probar):
 | `?autostart=1` | se salta la pantalla de arranque (pruebas automáticas) |
 
 En nativo, lo mismo por entorno: `AST_RES=1 AST_GLOW=3 make run`.
-
-**Operativo**: `rock-brothers` **no es un repo git** (nada commiteado; no hay
-`git diff` que consulte). El servidor de pruebas se suele dejar corriendo en
-segundo plano en el puerto 8099.
 
 ## Arquitectura
 
@@ -489,17 +472,3 @@ El servidor es la única autoridad, así que casi todo se toca en `internal/sim`
 - **Bots**: `TestNivelesDeBot`, `TestBotsUsanSusTrastos`, `TestBotPersigue`, `TestBotEsquiva`.
 - **Render**: `TestRenderConContenido`, `TestRenderEscalas`, `TestRenderSinMedidas`,
   `TestPreviewTablaFinal`.
-
-### El renombrado (asteroids-mp → rock-brothers)
-
-El **directorio** del proyecto y el **módulo Go** pasaron de `asteroids-mp` a
-`rock-brothers` (el nombre visible del juego es *ROCK BROTHERS*). Al hacerlo:
-
-- Las importaciones pasan a `rock-brothers/internal/...` y `go.mod` dice
-  `module rock-brothers`. En Go el módulo no tiene por qué llamarse como la
-  carpeta, pero así no hay dos nombres distintos.
-- El récord (`best.json`) vivía en la carpeta de configuración del usuario con el
-  nombre viejo (`.../asteroids-mp/`), así que `loadBest` **migra** el fichero a
-  `.../rock-brothers/` la primera vez que arranca (si no, se perdía el MAX).
-- El **nombre visible** no depende de esto: sale de `web/index.html` y de la
-  entrada i18n `"Rock Brothers"`.
